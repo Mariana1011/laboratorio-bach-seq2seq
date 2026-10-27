@@ -1,0 +1,24 @@
+# Jupyter / Python
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+
+# Dataset local
+train/
+valid/
+test/
+jsb_chorales.tgz
+
+# MLflow local
+mlruns/
+mlflow.db
+
+# Logs
+*.log
+
+# Entornos / secretos
+.env
+*.env
+
+# Sistema
+.DS_Store
