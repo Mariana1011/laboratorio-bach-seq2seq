@@ -153,14 +153,14 @@ E4 obtuvo la menor pérdida de validación y fue seleccionado como modelo final.
 
 ## Comparación de experimentos
 
-| Experimento | Arquitectura | Val Loss | Acc. nota | Acc. paso | Parámetros |
-|---|---|---:|---:|---:|---:|
-| E1 | LSTM H128 | 0.760435 | 0.788235 | 0.597632 | 281088 |
-| E2 | GRU H128 | 0.660780 | 0.812977 | 0.634865 | 231424 |
-| E3 | GRU H128 + atención | 0.708219 | 0.793772 | 0.609789 | 313472 |
-| E4 | GRU H256 | **0.611728** | **0.818658** | **0.641675** | 642560 |
+| Experimento | Arquitectura | Mejor época | Val Loss | Acc. nota | Acc. paso | Parámetros | Tiempo |
+|---|---|---:|---:|---:|---:|---:|---:|
+| E1 | LSTM H128 | 20 | 0.760435 | 0.788235 | 0.597632 | 281088 | 156.98 s |
+| E2 | GRU H128 | 19 | 0.660780 | 0.812977 | 0.634865 | 231424 | 112.71 s |
+| E3 | GRU H128 + atención | 16 | 0.708219 | 0.793772 | 0.609789 | 313472 | 197.64 s |
+| E4 | GRU H256 | 13 | **0.611728** | **0.818658** | **0.641675** | 642560 | 141.59 s |
 
-El modelo seleccionado fue **E4 — Encoder-Decoder GRU con hidden size 256**.
+El modelo seleccionado fue **E4 — Encoder-Decoder GRU con hidden size 256**, por presentar la menor pérdida de validación.
 
 ---
 
@@ -233,6 +233,26 @@ Las notas consecutivas iguales dentro de una misma voz se fusionan al crear el M
 
 ---
 
+## Detalles de generación musical
+
+Se utilizaron dos corales distintos del conjunto de validación:
+
+- `chorale_229.csv`
+- `chorale_230.csv`
+
+Configuración de generación:
+
+- Semilla aleatoria: `1234`
+- Temperature: `1.0`
+- Tempo: `120 BPM`
+- Contexto inicial: 32 pasos
+- Continuación generada: 32 pasos
+- Generación autoregresiva por bloques de hasta 16 pasos
+
+Las continuaciones presentan patrones repetitivos propios de una generación autoregresiva, pero también introducen variaciones entre pasos y voces. Los silencios se conservan mediante el valor MIDI `0`.
+
+La precisión predictiva obtenida en validación y test mide qué tan bien el modelo reproduce notas esperadas, pero no garantiza por sí sola una mejor calidad musical percibida. La evaluación musical puede verse afectada por repetición, coherencia armónica, variedad y continuidad entre las cuatro voces.
+
 ## MLflow
 
 Los experimentos E1, E2, E3 y E4 fueron registrados en MLflow.
@@ -255,6 +275,7 @@ El modelo ganador E4 fue registrado en MLflow Model Registry con:
 Modelo: bach-chorales-mariana
 Versión: 1
 Alias: champion
+Run de origen: b770a63a0ea9407f9942ba733e4d501b
 ```
 
 La aplicación carga el modelo mediante el alias `champion`.
@@ -289,19 +310,20 @@ Recibe:
 - `steps`: entre 1 y 64
 - `temperature`: entre 0.5 y 1.5
 
-Ejemplo conceptual:
+Ejemplo para construir una solicitud válida desde un coral:
 
-```json
-{
-  "seed": [
-    [72, 67, 60, 48]
-  ],
-  "steps": 32,
-  "temperature": 1.0
+```python
+payload = {
+    "seed": coro[["note0", "note1", "note2", "note3"]]
+        .iloc[:32]
+        .values
+        .tolist(),
+    "steps": 32,
+    "temperature": 1.0
 }
 ```
 
-El `seed` real debe contener exactamente 32 filas.
+El campo `seed` debe contener exactamente 32 filas y 4 valores por fila.
 
 La respuesta devuelve únicamente los pasos nuevos generados junto con el nombre y versión del modelo.
 
@@ -338,6 +360,7 @@ El dominio también es utilizado para otro laboratorio, por lo que solo uno de l
 .
 ├── 01_preparacion_datos.ipynb
 ├── app.py
+├── models.py
 ├── README.md
 ├── requirements.txt
 ├── checkpoints/
@@ -360,19 +383,43 @@ El dominio también es utilizado para otro laboratorio, por lo que solo uno de l
 
 ## Instalación
 
-Instalar dependencias:
+Instalar las dependencias del proyecto:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-El dataset `jsb_chorales` debe descargarse y extraerse localmente en las carpetas:
+### Descarga del dataset
+
+El laboratorio utiliza el dataset `jsb_chorales`, disponible en el repositorio de Géron.
+
+Descargar el archivo:
+
+```bash
+wget https://github.com/ageron/handson-ml2/raw/master/datasets/jsb_chorales/jsb_chorales.tgz
+```
+
+Extraer el contenido:
+
+```bash
+tar -xzf jsb_chorales.tgz
+```
+
+Al descomprimir el dataset se obtienen las particiones:
 
 ```text
 train/
 valid/
 test/
 ```
+
+Las particiones se conservan separadas durante todo el laboratorio:
+
+- `train/`: entrenamiento
+- `valid/`: validación y selección del modelo
+- `test/`: evaluación final del modelo seleccionado
+
+No se mezclan corales entre particiones y ninguna ventana atraviesa el límite de un coral.
 
 ---
 
@@ -413,3 +460,15 @@ http://localhost:8000/docs
 El proyecto implementa y compara diferentes arquitecturas recurrentes para continuación automática de corales de Bach.
 
 El mejor resultado fue obtenido por una **GRU Encoder-Decoder con hidden size 256**, que posteriormente fue registrada como modelo `champion`, evaluada sobre test, utilizada para generar archivos MIDI y expuesta mediante una API REST.
+
+## Uso de inteligencia artificial generativa
+
+Se utilizó **ChatGPT** como herramienta de apoyo para:
+
+- estructuración de código;
+- depuración de errores;
+- pruebas de la API;
+- organización de resultados;
+- documentación del repositorio.
+
+Los modelos musicales fueron entrenados únicamente con el dataset del laboratorio. ChatGPT no sustituyó el entrenamiento ni generó directamente las secuencias musicales evaluadas.
